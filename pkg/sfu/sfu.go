@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	cacheredis "github.com/pion/ion-sfu/pkg/cache"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/turn/v2"
 	"github.com/pion/webrtc/v3"
@@ -223,6 +225,12 @@ func NewSFU(c Config) *SFU {
 func (s *SFU) newSession(id string) Session {
 	session := NewSession(id, s.datachannels, s.webrtc).(*SessionLocal)
 
+	err := cacheredis.SetCacheRedis("sessionid", session.id)
+
+	if err != nil {
+		fmt.Println("Err set cache ssi", err)
+	}
+
 	session.OnClose(func() {
 		s.Lock()
 		delete(s.sessions, id)
@@ -274,4 +282,13 @@ func (s *SFU) GetSessions() []Session {
 		sessions = append(sessions, session)
 	}
 	return sessions
+}
+
+func (s *SFU) CheckSession(id string) (bool, *SFU) {
+	var result bool = false
+	ss := s.getSession(id)
+	if ss != nil {
+		result = true
+	}
+	return result, s
 }

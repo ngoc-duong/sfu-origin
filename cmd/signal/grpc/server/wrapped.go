@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -190,6 +191,10 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 	m := cmux.New(listener)
 	grpcListener := m.Match(cmux.HTTP2())
 	httpListener := m.Match(cmux.HTTP1Fast())
+
+	fmt.Println(grpcListener.Addr())
+	fmt.Println(httpListener.Addr().String())
+
 	g := new(errgroup.Group)
 	g.Go(func() error { return s.GRPCServer.Serve(grpcListener) })
 	g.Go(func() error { return httpServer.Serve(httpListener) })

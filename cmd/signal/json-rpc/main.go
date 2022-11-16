@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
+	cacheredis "github.com/pion/ion-sfu/pkg/cache"
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
@@ -99,8 +100,8 @@ func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&cert, "cert", "", "cert file")
 	flag.StringVar(&key, "key", "", "key file")
-	flag.StringVar(&addr, "a", ":7000", "address to use")
-	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
+	flag.StringVar(&addr, "a", ":7070", "address to use")
+	flag.StringVar(&metricsAddr, "m", ":8200", "merics to use")
 	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
@@ -164,6 +165,8 @@ func main() {
 		WriteBufferSize: 1024,
 	}
 
+	cacheredis.DeleteAll("sessionid")
+
 	http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -175,7 +178,40 @@ func main() {
 		defer p.Close()
 
 		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
+		p.Conn = jc
+
 		<-jc.DisconnectNotify()
+	}))
+
+	http.Handle("/pull", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		done := make(chan struct{})
+		c, err := upgrader.Upgrade(w, r, nil)
+
+		if err != nil {
+			panic(err)
+		}
+		defer c.Close()
+
+		conn := &server.Conn{
+			Conn: c,
+		}
+
+		// sids, err := cacheredis.GetCacheRedis("sessionid")
+		// if err != nil {
+		// 	logger.Error(err, "Err get cache ssid")
+		// }
+
+		// pullPeers := make(map[string]*server.JSONSignal, len(sids))
+
+		// for _, id := range sids {
+		// 	p := server.NewJSONSignal(sfu.NewPeer(s), logger)
+		// 	defer p.Close()
+		// 	pullPeers[id] = p
+		// }
+
+		go server.ReadMessage(conn, server.PullPeers, logger, done)
+		<-done
 	}))
 
 	go startMetrics(metricsAddr)

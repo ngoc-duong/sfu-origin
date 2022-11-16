@@ -35,6 +35,8 @@ type JSONSignal struct {
 	logr.Logger
 }
 
+var PullPeers = make(map[string]*JSONSignal)
+
 func NewJSONSignal(p *sfu.PeerLocal, l logr.Logger) *JSONSignal {
 	return &JSONSignal{p, l}
 }
@@ -58,34 +60,48 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			break
 		}
 
-		p.OnOffer = func(offer *webrtc.SessionDescription) {
-			if err := conn.Notify(ctx, "offer", offer); err != nil {
-				p.Logger.Error(err, "error sending offer")
+		if join.SID != "" {
+			p.OnOffer = func(offer *webrtc.SessionDescription) {
+				if err := conn.Notify(ctx, "offer", offer); err != nil {
+					p.Logger.Error(err, "error sending offer")
+				}
+
+			}
+			p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
+
+				if err := conn.Notify(ctx, "trickle", Trickle{
+					Candidate: *candidate,
+					Target:    target,
+				}); err != nil {
+					p.Logger.Error(err, "error sending ice candidate")
+				}
 			}
 
-		}
-		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
-			if err := conn.Notify(ctx, "trickle", Trickle{
-				Candidate: *candidate,
-				Target:    target,
-			}); err != nil {
-				p.Logger.Error(err, "error sending ice candidate")
+			checkSs, s := p.GetProvider().CheckSession(join.SID)
+
+			if checkSs == false {
+				peer := NewJSONSignal(sfu.NewPeer(s), p.Logger)
+				//defer p.Close()
+				PullPeers[join.SID] = peer
 			}
-		}
 
-		err = p.Join(join.SID, join.UID, join.Config)
-		if err != nil {
-			replyError(err)
-			break
-		}
+			err = p.Join(join.SID, join.UID, join.Config)
+			if err != nil {
+				replyError(err)
+				break
+			}
 
-		answer, err := p.Answer(join.Offer)
-		if err != nil {
-			replyError(err)
-			break
-		}
+			answer, err := p.Answer(join.Offer)
+			if err != nil {
+				replyError(err)
+				break
+			}
 
-		_ = conn.Reply(ctx, req.ID, answer)
+			_ = conn.Reply(ctx, req.ID, answer)
+		} else {
+			p.Close()
+			//p.Conn.Close()
+		}
 
 	case "offer":
 		var negotiation Negotiation

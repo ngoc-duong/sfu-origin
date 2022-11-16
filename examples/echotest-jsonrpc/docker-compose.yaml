@@ -5,7 +5,7 @@ services:
     volumes:
       - ./:/usr/share/nginx/html
     ports:
-      - 8000:80
+      - 8080:80
 
   sfu:
     image: pionwebrtc/ion-sfu:latest-jsonrpc

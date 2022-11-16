@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
+	cacheredis "github.com/pion/ion-sfu/pkg/cache"
 	"github.com/pion/transport/packetio"
 
 	"github.com/pion/ion-sfu/pkg/relay"
@@ -75,13 +76,26 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		Logger.V(1).Info("Peer got remote track id",
+		Logger.V(0).Info("Peer got remote track id",
 			"peer_id", p.id,
 			"track_id", track.ID(),
 			"mediaSSRC", track.SSRC(),
 			"rid", track.RID(),
 			"stream_id", track.StreamID(),
 		)
+
+		go func() {
+			var flag bool = true
+			for _, id := range cacheredis.PushPeers {
+				if id == p.id {
+					flag = false
+					break
+				}
+			}
+			if flag == true {
+				cacheredis.PushPeers = append(cacheredis.PushPeers, p.id)
+			}
+		}()
 
 		r, pub := p.router.AddReceiver(receiver, track, track.ID(), track.StreamID())
 		if pub {
@@ -91,7 +105,7 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			p.tracks = append(p.tracks, publisherTrack)
 			for _, rp := range p.relayPeers {
 				if err = p.createRelayTrack(track, r, rp.peer); err != nil {
-					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
+					Logger.V(0).Error(err, "Creating relay track.", "peer_id", p.id)
 				}
 			}
 			p.mu.Unlock()
@@ -114,12 +128,12 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		Logger.V(1).Info("ice connection status", "state", connectionState)
+		Logger.V(0).Info("ice connection status", "state", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			Logger.V(1).Info("webrtc ice closed", "peer_id", p.id)
+			Logger.V(0).Info("webrtc ice closed", "peer_id", p.id)
 			p.Close()
 		}
 
