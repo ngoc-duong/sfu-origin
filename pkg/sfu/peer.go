@@ -359,6 +359,10 @@ func (p *PeerLocal) CloseConn() error {
 			return err
 		}
 	}
-	p.Conn.Close()
+
+	if p.Conn != nil {
+		p.Conn.Close()
+	}
+
 	return nil
 }

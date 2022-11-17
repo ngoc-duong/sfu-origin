@@ -14,6 +14,7 @@ import (
 	cacheredis "github.com/pion/ion-sfu/pkg/cache"
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+	schedulecheck "github.com/pion/ion-sfu/pkg/schedule"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sourcegraph/jsonrpc2"
@@ -193,28 +194,22 @@ func main() {
 		}
 		defer c.Close()
 
+		c.SetCloseHandler(func(code int, text string) error {
+			fmt.Println("Handle close connect...")
+			return nil
+		})
+
 		conn := &server.Conn{
 			Conn: c,
 		}
-
-		// sids, err := cacheredis.GetCacheRedis("sessionid")
-		// if err != nil {
-		// 	logger.Error(err, "Err get cache ssid")
-		// }
-
-		// pullPeers := make(map[string]*server.JSONSignal, len(sids))
-
-		// for _, id := range sids {
-		// 	p := server.NewJSONSignal(sfu.NewPeer(s), logger)
-		// 	defer p.Close()
-		// 	pullPeers[id] = p
-		// }
 
 		go server.ReadMessage(conn, server.PullPeers, logger, done)
 		<-done
 	}))
 
 	go startMetrics(metricsAddr)
+
+	go schedulecheck.ScheduleCheckSession(s, logger)
 
 	var err error
 	if key != "" && cert != "" {

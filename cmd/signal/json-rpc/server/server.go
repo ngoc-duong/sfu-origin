@@ -100,7 +100,6 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			_ = conn.Reply(ctx, req.ID, answer)
 		} else {
 			p.Close()
-			//p.Conn.Close()
 		}
 
 	case "offer":

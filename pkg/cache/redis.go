@@ -41,14 +41,23 @@ func SetCacheRedis(key string, value string) error {
 		errPaser := json.Unmarshal([]byte(ssiCache), &result)
 		err = errPaser
 	}
-	fmt.Println(result)
-	result = append(result, value)
-	fmt.Println(result)
+
+	checkExist := false
+	for _, ss := range result {
+		if ss == value {
+			checkExist = true
+			break
+		}
+	}
+	if checkExist == false {
+		result = append(result, value)
+	}
+
 	resultJson, errJson := json.Marshal(result)
 	if errJson != nil {
 		return errJson
 	}
-	errSet := redisClient.Set(ctx, key, string(resultJson), time.Minute*15).Err()
+	errSet := redisClient.Set(ctx, key, string(resultJson), time.Hour*1).Err()
 	err = errSet
 	return err
 }
@@ -72,7 +81,7 @@ func DeleteCache(key string, value string) error {
 	if errJson != nil {
 		return errJson
 	}
-	errSet := redisClient.Set(ctx, key, string(resultJson), time.Minute*15).Err()
+	errSet := redisClient.Set(ctx, key, string(resultJson), time.Hour*1).Err()
 	err = errSet
 	return err
 }
